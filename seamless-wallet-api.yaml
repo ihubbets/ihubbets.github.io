@@ -159,6 +159,101 @@ paths:
         '302':
           description: Redirect to the game page
 
+  # -------------------------------------------------------------------------
+  # Create Free Spin Offer
+  # -------------------------------------------------------------------------
+  /create-free-spins:
+    post:
+      operationId: createFreeSpins
+      summary: Create a free-spin offer for a player
+      description: |
+        Creates a free-spin offer on the Provider's side. The Operator sends
+        offer details (game, spin count, bet value, expiration) along with
+        the `free_spin_offer_id` that will be used to reference this offer
+        in all subsequent wallet callbacks and cancellation requests.
+      tags: [Provider API]
+      servers:
+        - url: https://{providerHost}
+          description: Game provider host
+          variables:
+            providerHost:
+              default: games.provider.com
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFreeSpinOfferRequest'
+            example:
+              user_id: 123
+              game_id: "1056"
+              spin_count: 20
+              bet_value: "0.50"
+              currency: "UAH"
+              free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+              expires_at: "2025-12-31T23:59:59Z"
+              signature: "c215c88dcc3e94627fcc9c8010523b88"
+      responses:
+        '200':
+          description: Free-spin offer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
+              example:
+                status: true
+                signature: "3dffec7181b642b1d74726d4d076a204"
+        '200#error':
+          description: Free-spin offer creation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Cancel Free Spin Offer
+  # -------------------------------------------------------------------------
+  /cancel-free-spins:
+    post:
+      operationId: cancelFreeSpins
+      summary: Cancel an existing free-spin offer
+      description: |
+        Cancels a previously created free-spin offer on the Provider's side.
+        Any unused spins from the offer are voided. Already played spins
+        and their results are not affected.
+      tags: [Provider API]
+      servers:
+        - url: https://{providerHost}
+          description: Game provider host
+          variables:
+            providerHost:
+              default: games.provider.com
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelFreeSpinOfferRequest'
+            example:
+              free_spin_offer_id: "aeoif24-dflaep1-34k3l"
+              signature: "85eca54b273fcc95424e76d8543e0fed"
+      responses:
+        '200':
+          description: Free-spin offer cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
+              example:
+                status: true
+                signature: "45eca54b273fcc95424e76d8543e0gt7"
+        '200#error':
+          description: Cancellation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
+
   # =========================================================================
   # Operator Wallet API (Provider → Operator)
   # =========================================================================
@@ -708,6 +803,79 @@ components:
           description: >
             Tax amount as a decimal string with 2 fractional digits
             (e.g. "180.00", "50.00").
+
+    # ── Free Spin Offer (Provider API) ─────────────────────────────────────
+    CreateFreeSpinOfferRequest:
+      type: object
+      required: [user_id, game_id, spin_count, bet_value, currency, free_spin_offer_id, expires_at, signature]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game the free spins apply to
+        spin_count:
+          type: integer
+          minimum: 1
+          description: Number of free spins in the offer
+        bet_value:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Bet value per spin
+        currency:
+          $ref: '#/components/schemas/Currency'
+        free_spin_offer_id:
+          type: string
+          format: uuid
+          description: >
+            Unique offer identifier (UUID) assigned by the Operator.
+            Used to reference this offer in `/free-spin-bet` and
+            `/free-spin-win` wallet callbacks, and in `/cancel-free-spins`.
+        expires_at:
+          type: string
+          format: date-time
+          description: Offer expiration date-time (ISO 8601)
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    CancelFreeSpinOfferRequest:
+      type: object
+      required: [free_spin_offer_id, signature]
+      properties:
+        free_spin_offer_id:
+          type: string
+          format: uuid
+          description: Offer identifier originally provided in `/create-free-spins`
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    FreeSpinOfferStatusResponse:
+      type: object
+      required: [status, signature]
+      properties:
+        status:
+          type: boolean
+          description: "true on success"
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    FreeSpinOfferErrorResponse:
+      type: object
+      required: [status, message, signature]
+      properties:
+        status:
+          type: boolean
+          const: false
+        message:
+          type: string
+          maxLength: 255
+          description: Human-readable error message
+        signature:
+          $ref: '#/components/schemas/Signature'
 
     # ── Auth ────────────────────────────────────────────────────────────────
     AuthRequest:

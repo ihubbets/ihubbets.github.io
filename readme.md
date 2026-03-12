@@ -1,4 +1,4 @@
 ```shell
-npx redoc-cli bundle seamless-wallet-api.yaml
+npx @redocly/cli build-docs seamless-wallet-api.yaml
 mv redoc-static.html index.html
 ```
