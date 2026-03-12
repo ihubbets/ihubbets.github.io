@@ -52,7 +52,7 @@ info:
     > never sent in the request/response body. Both sides (Provider and Operator)
     > must use the same salt to produce matching signatures.
 
-    **Idempotency:** Duplicate transaction requests return the original `operation_id`
+    **Idempotency:** Duplicate transaction requests return the original `transaction_id`
     and the current user balance.
 
     **Response header:** All responses contain an `internal-request-id` header —
@@ -386,7 +386,7 @@ paths:
               example:
                 status: true
                 balance: "9894693.00"
-                operation_id: 17513312722
+                transaction_id: "17513312722"
                 currency: "UAH"
                 signature: "c215c88dcc3e94627fcc9c8010523b88"
         '200#error':
@@ -402,9 +402,9 @@ paths:
   /free-spin-bet:
     post:
       operationId: freeSpinBet
-      summary: Place a free spin bet
+      summary: Place a free-spin bet
       description: |
-        Places a bet within a free spin offer. The `amount` carries the nominal
+        Places a bet within a free-spin offer. The `amount` carries the nominal
         bet level of the spin; some providers send 0 when no funds are deducted.
       tags: [Operator Wallet API]
       requestBody:
@@ -435,7 +435,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResponse'
               example:
                 status: true
-                operation_id: 17513312722
+                transaction_id: "17513312722"
                 balance: "98946.93"
                 currency: "UAH"
                 signature: "c215c88dcc3e94627fcc9c8010523b88"
@@ -496,7 +496,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResponse'
               example:
                 status: true
-                operation_id: 17513312723
+                transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
                 signature: "45eca54b273fcc95424e76d8543e0gt7"
@@ -550,7 +550,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResponse'
               example:
                 status: true
-                operation_id: "17513312723"
+                transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
                 signature: "45eca54b273fcc95424e76d8543e0gt7"
@@ -597,7 +597,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResponse'
               example:
                 status: true
-                operation_id: "17513312723"
+                transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
                 signature: "45eca54b273fcc95424e76d8543e0gt7"
@@ -644,7 +644,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResponse'
               example:
                 status: true
-                operation_id: "17513312723"
+                transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
                 signature: "45eca54b273fcc95424e76d8543e0gt7"
@@ -715,7 +715,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResponse'
               example:
                 status: true
-                operation_id: "17513312723"
+                transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
                 signature: "45eca54b273fcc95424e76d8543e0gt7"
@@ -793,16 +793,14 @@ components:
             "income_tax", "withholding").
         percent:
           type: string
+          format: decimal
           pattern: '^\d+\.\d{1,8}$'
-          description: >
-            Tax rate as a decimal string with 2 fractional digits
-            (e.g. "18.00", "5.00").
+          description: Tax rate as a decimal string (e.g. "18.00", "5.00")
         amount:
           type: string
+          format: decimal
           pattern: '^\d+\.\d{1,8}$'
-          description: >
-            Tax amount as a decimal string with 2 fractional digits
-            (e.g. "180.00", "50.00").
+          description: Tax amount as a decimal string (e.g. "180.00", "50.00")
 
     # ── Free Spin Offer (Provider API) ─────────────────────────────────────
     CreateFreeSpinOfferRequest:
@@ -816,11 +814,11 @@ components:
         game_id:
           type: string
           maxLength: 255
-          description: Identifier of the game the free spins apply to
+          description: Identifier of the game
         spin_count:
           type: integer
           minimum: 1
-          description: Number of free spins in the offer
+          description: Number of free-spins in the offer
         bet_value:
           type: string
           format: decimal
@@ -832,9 +830,9 @@ components:
           type: string
           format: uuid
           description: >
-            Unique offer identifier (UUID) assigned by the Operator.
-            Used to reference this offer in `/free-spin-bet` and
-            `/free-spin-win` wallet callbacks, and in `/cancel-free-spins`.
+            Free-spin offer identifier (UUID) assigned by the Operator.
+            Referenced in `/free-spin-bet`, `/free-spin-win` callbacks
+            and `/cancel-free-spins`.
         expires_at:
           type: string
           format: date-time
@@ -849,7 +847,7 @@ components:
         free_spin_offer_id:
           type: string
           format: uuid
-          description: Offer identifier originally provided in `/create-free-spins`
+          description: Free-spin offer identifier provided via `/create-free-spins`
         signature:
           $ref: '#/components/schemas/Signature'
 
@@ -859,7 +857,7 @@ components:
       properties:
         status:
           type: boolean
-          description: "true on success"
+          description: "true on success, false on failure"
         signature:
           $ref: '#/components/schemas/Signature'
 
@@ -913,7 +911,7 @@ components:
           type: string
           format: decimal
           pattern: '^\d+\.\d{1,8}$'
-          description: Current user balance (e.g. 235.65)
+          description: User balance after the operation
         currency:
           $ref: '#/components/schemas/Currency'
         lang:
@@ -949,7 +947,7 @@ components:
           type: string
           format: decimal
           pattern: '^\d+\.\d{1,8}$'
-          description: User balance after operation
+          description: User balance after the operation
         currency:
           $ref: '#/components/schemas/Currency'
         signature:
@@ -977,11 +975,10 @@ components:
           format: int64
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
-            Numeration must be transparent throughout all bets and wins.
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the operation
+          description: Unique identifier of the transaction
         amount:
           type: string
           format: decimal
@@ -1017,16 +1014,17 @@ components:
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the operation
+          description: Unique identifier of the transaction
         free_spin_offer_id:
           type: string
-          description: Offer id of the free spin promotion
+          format: uuid
+          description: Free-spin offer identifier provided via `/create-free-spins`
         amount:
           type: string
           format: decimal
           pattern: '^\d+\.\d{1,8}$'
           description: >
-            Nominal bet amount of the free spin. Some providers send the
+            Nominal bet amount of the free-spin. Some providers send the
             bet level value (> 0), others send 0 since no funds are
             deducted from the player's wallet.
         currency:
@@ -1059,7 +1057,7 @@ components:
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the operation
+          description: Unique identifier of the transaction
         bet_transaction_id:
           type: string
           maxLength: 255
@@ -1101,14 +1099,15 @@ components:
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the operation
+          description: Unique identifier of the transaction
         free_spin_offer_id:
           type: string
-          description: Offer id of the free-spin promotion
+          format: uuid
+          description: Free-spin offer identifier provided via `/create-free-spins`
         bet_transaction_id:
           type: string
           maxLength: 255
-          description: Transaction ID of the original free-spin bet (optional, for traceability)
+          description: Transaction ID of the original bet being settled
         amount:
           type: string
           format: decimal
@@ -1146,7 +1145,7 @@ components:
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the operation
+          description: Unique identifier of the transaction
         amount:
           type: string
           format: decimal
@@ -1184,7 +1183,7 @@ components:
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the operation
+          description: Unique identifier of the transaction
         amount:
           type: string
           format: decimal
@@ -1212,6 +1211,7 @@ components:
           description: Unique player identifier on Operator's side
         type:
           type: string
+          maxLength: 50
           enum: [bet, win]
           description: >
             Type of the original transaction being refunded:
@@ -1229,7 +1229,7 @@ components:
         transaction_id:
           type: string
           maxLength: 255
-          description: Unique identifier of the refund operation
+          description: Unique identifier of the transaction
         original_transaction_id:
           type: string
           maxLength: 255
@@ -1247,17 +1247,17 @@ components:
     # ── Shared response schemas ───────────────────────────────────────────────
     TransactionResponse:
       type: object
-      required: [status, operation_id, balance, currency, signature]
+      required: [status, transaction_id, balance, currency, signature]
       properties:
         status:
           type: boolean
-          description: "true on success"
-        operation_id:
-          oneOf:
-            - type: integer
-              format: int64
-            - type: string
-          description: Unique transaction identifier from the operator's system
+          description: "true on success, false on failure"
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: >
+            Unique transaction identifier assigned by the Operator.
+            On duplicate requests, the original transaction_id is returned.
         balance:
           type: string
           format: decimal
