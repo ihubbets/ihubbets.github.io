@@ -107,10 +107,10 @@ paths:
           description: |
             Game mode:
             - `real` — real-money game
-            - `demo_play` — demo game
+            - `demo` — demo game
           schema:
             type: string
-            enum: [real, demo_play]
+            enum: [real, demo]
         - name: game_id
           in: query
           required: true
