@@ -1,0 +1,1156 @@
+openapi: 3.1.0
+info:
+  title: Seamless Wallet API
+  version: 4.0.0
+  description: |
+    Seamless Wallet integration protocol for game providers and operators.
+
+    In the Seamless Wallet implementation, there is no wallet on the Provider's side.
+    The wallet exists only on the Operator's side. The Operator is responsible for
+    storing each user's balance and all transaction history.
+
+    **Roles:**
+    - **Provider** — Game provider
+    - **Operator** — Game operation handler
+
+    **Protocol:** JSON over HTTPS POST
+
+    ## Signature
+
+    All requests and responses include a `signature` field — a packet integrity
+    validation hash. The algorithm:
+
+    1. Collect all request/response body fields into a flat key-value map
+    2. Add the shared `salt` (provided during integration onboarding)
+    3. Sort the map alphabetically by key (`ksort`)
+    4. Concatenate all **values** (not keys) into a single string
+    5. Compute `md5()` of the resulting string
+
+    **PHP example:**
+
+    ```php
+    $data = [
+        "currency"  => "EUR",
+        "token"     => "a172bb59a80dde62889950bc289b9640",
+        "user_id"   => 123,
+        // ... other fields ...
+        "salt"      => "*some secret salt*"
+    ];
+    ksort($data);
+    $signature = md5(implode('', $data));
+    ```
+
+    **Pseudocode (language-agnostic):**
+
+    ```
+    fields = { ...request_body, "salt": SHARED_SECRET }
+    sorted_values = sort_by_key(fields).values()
+    signature = md5(concat(sorted_values))
+    ```
+
+    > **Note:** The `salt` key is included in the sorted map for hashing but is
+    > never sent in the request/response body. Both sides (Provider and Operator)
+    > must use the same salt to produce matching signatures.
+
+    **Idempotency:** Duplicate transaction requests return the original `operation_id`
+    and the current user balance.
+
+    **Response header:** All responses contain an `internal-request-id` header —
+    a unique request identifier for quick transaction lookup on the operator's side.
+
+servers:
+  - url: https://{operatorHost}
+    description: Operator — implements Seamless Wallet API called by the Provider
+    variables:
+      operatorHost:
+        default: api.operator.com
+        description: Operator's Seamless Wallet API host
+  - url: https://{providerHost}
+    description: Provider — game launch and content delivery
+    variables:
+      providerHost:
+        default: games.provider.com
+        description: Game provider's host
+
+# ===========================================================================
+# Paths
+# ===========================================================================
+paths:
+
+  # =========================================================================
+  # Provider API (Operator → Provider)
+  # =========================================================================
+
+  # -------------------------------------------------------------------------
+  # Launch Game
+  # -------------------------------------------------------------------------
+  /launch-game:
+    get:
+      operationId: launchGame
+      summary: Launch a game session
+      description: |
+        Opens a game in the provider's iframe/page. Called by the operator's
+        frontend to start a real or demo game session.
+
+        The game provider must support auto-resize of game content and mobile games.
+      tags: [Provider API]
+      servers:
+        - url: https://{providerHost}
+          description: Game provider host
+          variables:
+            providerHost:
+              default: games.provider.com
+      parameters:
+        - name: action
+          in: query
+          required: true
+          description: |
+            Game mode:
+            - `real` — real-money game
+            - `demo_play` — demo game
+          schema:
+            type: string
+            enum: [real, demo_play]
+        - name: game_id
+          in: query
+          required: true
+          description: Game id (numeric) or absolute game name
+          schema:
+            oneOf:
+              - type: integer
+              - type: string
+          examples:
+            byId:
+              value: 623
+              summary: Game by numeric id
+            byName:
+              value: Valhalla
+              summary: Game by name
+        - name: token
+          in: query
+          required: true
+          description: Gaming session token. Required for real game mode only.
+          schema:
+            type: string
+            maxLength: 255
+        - name: back_url
+          in: query
+          required: true
+          description: URL for redirection to casino lobby when the player clicks Home
+          schema:
+            type: string
+            format: uri
+        - name: client_id
+          in: query
+          required: false
+          description: Unique Operator identifier assigned by the Provider
+          schema:
+            type: string
+        - name: language
+          in: query
+          required: false
+          description: User's language code (ISO 639-1)
+          schema:
+            type: string
+            maxLength: 2
+      responses:
+        '200':
+          description: Game page rendered successfully (HTML content)
+        '302':
+          description: Redirect to the game page
+
+  # =========================================================================
+  # Operator Wallet API (Provider → Operator)
+  # =========================================================================
+
+  # -------------------------------------------------------------------------
+  # Auth
+  # -------------------------------------------------------------------------
+  /auth:
+    post:
+      operationId: auth
+      summary: Authenticate player session
+      description: |
+        Validates the gaming session token and returns player details.
+        Called on user logon to get relevant data for processing and
+        validate received data from launcher information.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              signature: "3dffec7181b642b1d74726d4d076a204"
+      responses:
+        '200':
+          description: Successful authentication
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                status: true
+                user_id: 123456
+                user_name: "Taras Shevchenko"
+                balance: "98947.93"
+                currency: "UAH"
+                lang: "uk"
+                test_user: false
+                signature: "3dffec7181b642b1d74726d4d076a204"
+        '200#error':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Balance
+  # -------------------------------------------------------------------------
+  /balance:
+    post:
+      operationId: balance
+      summary: Check player balance
+      description: Returns the current balance of the player.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              currency: "UAH"
+              signature: "3dffec7181b642b1d74726d4d076a204"
+      responses:
+        '200':
+          description: Balance retrieved
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+              example:
+                status: true
+                balance: "98947.93"
+                currency: "UAH"
+                signature: "3dff3c7181b642b1d74726d4f076ajk2"
+        '200#error':
+          description: Balance check failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Bet
+  # -------------------------------------------------------------------------
+  /bet:
+    post:
+      operationId: bet
+      summary: Place a bet
+      description: |
+        Deducts the bet amount from the player's balance.
+        The `amount` must always be > 0.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              game_id: "1056"
+              round_id: 123456
+              transaction_id: "97401685"
+              amount: "10.50"
+              currency: "UAH"
+              signature: "c215c88dcc3e94627fcc9c8010523b88"
+      responses:
+        '200':
+          description: Bet placed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                balance: "9894693.00"
+                operation_id: 17513312722
+                currency: "UAH"
+                signature: "c215c88dcc3e94627fcc9c8010523b88"
+        '200#error':
+          description: Bet failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Free Spin Bet
+  # -------------------------------------------------------------------------
+  /free-spin-bet:
+    post:
+      operationId: freeSpinBet
+      summary: Place a free spin bet
+      description: |
+        Places a bet within a free spin offer. The `amount` carries the nominal
+        bet level of the spin; some providers send 0 when no funds are deducted.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FreeSpinBetRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              game_id: "1056"
+              round_id: 123456
+              transaction_id: "97401685"
+              amount: "10.00"
+              currency: "UAH"
+              free_spin_offer_id: "aeoif24-dflaep1-34k3l"
+              signature: "c215c88dcc3e94627fcc9c8010523b88"
+      responses:
+        '200':
+          description: Free-spin bet placed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                operation_id: 17513312722
+                balance: "98946.93"
+                currency: "UAH"
+                signature: "c215c88dcc3e94627fcc9c8010523b88"
+        '200#error':
+          description: Free-spin bet failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Win
+  # -------------------------------------------------------------------------
+  /win:
+    post:
+      operationId: win
+      summary: Place a win
+      description: |
+        Credits the win amount to the player's balance.
+
+        **Important rules:**
+        - Win with amount = 0 is required for lost bets.
+        - Wins without corresponding bets will not be processed.
+        - Wins must be repeated until a response with success is received.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WinRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              game_id: "1056"
+              round_id: 123456
+              transaction_id: "97401686"
+              bet_transaction_id: "97401685"
+              amount: "20.00"
+              currency: "UAH"
+              taxes:
+                - type: "pdfo"
+                  percent: "18.00"
+                  amount: "3.60"
+                - type: "military_levy"
+                  percent: "5.00"
+                  amount: "1.00"
+              signature: "85eca54b273fcc95424e76d8543e0fed"
+      responses:
+        '200':
+          description: Win processed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                operation_id: 17513312723
+                balance: "98948.93"
+                currency: "UAH"
+                signature: "45eca54b273fcc95424e76d8543e0gt7"
+        '200#error':
+          description: Win processing failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Free Spin Win
+  # -------------------------------------------------------------------------
+  /free-spin-win:
+    post:
+      operationId: freeSpinWin
+      summary: Place a free-spin win
+      description: |
+        Credits the free-spin win amount to the player's balance.
+
+        **Important rules:**
+        - Win with amount = 0 is required for lost bets.
+        - Wins without corresponding bets will not be processed.
+        - Wins must be repeated until a response with success is received.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FreeSpinWinRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              game_id: "1056"
+              round_id: 123456
+              transaction_id: "97401686"
+              free_spin_offer_id: "iery98eydias-fkljfo8e-ueg6"
+              amount: "20.00"
+              currency: "UAH"
+              signature: "85eca54b273fcc95424e76d8543e0fed"
+      responses:
+        '200':
+          description: Free-spin win processed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                operation_id: "17513312723"
+                balance: "98948.93"
+                currency: "UAH"
+                signature: "45eca54b273fcc95424e76d8543e0gt7"
+        '200#error':
+          description: Free-spin win processing failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Tournament Win
+  # -------------------------------------------------------------------------
+  /tournament-win:
+    post:
+      operationId: tournamentWin
+      summary: Place a tournament win
+      description: Credits the tournament win amount to the player's balance.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TournamentWinRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              game_id: "1056"
+              round_id: 123456
+              transaction_id: "97401686"
+              amount: "20.00"
+              currency: "UAH"
+              signature: "85eca54b273fcc95424e76d8543e0fed"
+      responses:
+        '200':
+          description: Tournament win processed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                operation_id: "17513312723"
+                balance: "98948.93"
+                currency: "UAH"
+                signature: "45eca54b273fcc95424e76d8543e0gt7"
+        '200#error':
+          description: Tournament win processing failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Jackpot Win
+  # -------------------------------------------------------------------------
+  /jackpot-win:
+    post:
+      operationId: jackpotWin
+      summary: Place a jackpot win
+      description: Credits the jackpot win amount to the player's balance.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JackpotWinRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              game_id: "1056"
+              round_id: 123456
+              transaction_id: "97401686"
+              amount: "20.00"
+              currency: "UAH"
+              signature: "85eca54b273fcc95424e76d8543e0fed"
+      responses:
+        '200':
+          description: Jackpot win processed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                operation_id: "17513312723"
+                balance: "98948.93"
+                currency: "UAH"
+                signature: "45eca54b273fcc95424e76d8543e0gt7"
+        '200#error':
+          description: Jackpot win processing failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Refund
+  # -------------------------------------------------------------------------
+  /refund:
+    post:
+      operationId: refund
+      summary: Refund a transaction
+      description: |
+        Refunds a previously placed bet or cancels a win, adjusting the
+        player's balance accordingly.
+
+        The `type` field determines what is being refunded:
+        - `bet` — cancels a bet, credits the amount back to the player
+        - `win` — cancels a win, debits the amount from the player
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+            examples:
+              bet_refund:
+                summary: Refund a bet
+                value:
+                  token: "704be4er164ef34cc56ccbb64a960868"
+                  user_id: 123
+                  type: "bet"
+                  game_id: "1056"
+                  round_id: 123457
+                  transaction_id: "97401687"
+                  original_transaction_id: "97401685"
+                  amount: "10.00"
+                  currency: "UAH"
+                  signature: "85eca54b273fcc95424e76d8543e0fed"
+              win_refund:
+                summary: Cancel a win
+                value:
+                  token: "704be4er164ef34cc56ccbb64a960868"
+                  user_id: 123
+                  type: "win"
+                  game_id: "1056"
+                  round_id: 123456
+                  transaction_id: "97401688"
+                  original_transaction_id: "97401686"
+                  amount: "20.00"
+                  currency: "UAH"
+                  signature: "a3f5c88dcc3e94627fcc9c8010523b99"
+      responses:
+        '200':
+          description: Refund processed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                operation_id: "17513312723"
+                balance: "98948.93"
+                currency: "UAH"
+                signature: "45eca54b273fcc95424e76d8543e0gt7"
+        '200#error':
+          description: Refund failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+
+  # ---------------------------------------------------------------------------
+  # Headers
+  # ---------------------------------------------------------------------------
+  headers:
+    InternalRequestId:
+      description: Unique request identifier for quick transaction search on the operator's side
+      schema:
+        type: string
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+
+    # ── Signature field (reusable) ──────────────────────────────────────────
+    Signature:
+      type: string
+      maxLength: 32
+      description: >
+        MD5 hash of all packet fields sorted alphabetically (ksort)
+        and concatenated with the shared salt.
+
+    # ── Currency field (reusable) ───────────────────────────────────────────
+    Currency:
+      type: string
+      maxLength: 10
+      description: >
+        Currency code. ISO 4217 for fiat (3 chars), or a common ticker
+        for cryptocurrencies (e.g. USDT, BTC).
+      examples:
+        - "UAH"
+        - "EUR"
+        - "USD"
+        - "USDT"
+        - "BTC"
+        - "ETH"
+
+    # ── Tax data (reusable, optional) ─────────────────────────────────────
+    Taxes:
+      type: array
+      description: >
+        List of taxes calculated by the Provider. Optional — included only
+        when the Provider applies taxes to the win amount on behalf of the
+        Operator. When present, `amount` in the parent request is always
+        the gross (pre-tax) value. Multiple tax entries support jurisdictions
+        with cascading or composite tax rules (e.g. UA: PDFO + military levy).
+      minItems: 1
+      items:
+        $ref: '#/components/schemas/TaxItem'
+
+    TaxItem:
+      type: object
+      required: [type, percent, amount]
+      properties:
+        type:
+          type: string
+          maxLength: 50
+          description: >
+            Tax type identifier (e.g. "pdfo", "military_levy",
+            "income_tax", "withholding").
+        percent:
+          type: string
+          pattern: '^\d+\.\d{1,8}$'
+          description: >
+            Tax rate as a decimal string with 2 fractional digits
+            (e.g. "18.00", "5.00").
+        amount:
+          type: string
+          pattern: '^\d+\.\d{1,8}$'
+          description: >
+            Tax amount as a decimal string with 2 fractional digits
+            (e.g. "180.00", "50.00").
+
+    # ── Auth ────────────────────────────────────────────────────────────────
+    AuthRequest:
+      type: object
+      required: [token, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    AuthResponse:
+      type: object
+      required: [signature, status, user_id, user_name, test_user, balance, currency, lang]
+      properties:
+        signature:
+          $ref: '#/components/schemas/Signature'
+        status:
+          type: boolean
+          description: "true on success, false on failure"
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        user_name:
+          type: string
+          maxLength: 255
+          description: Player's display name
+        test_user:
+          type: boolean
+          description: Whether the player is a test user
+        balance:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Current user balance (e.g. 235.65)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        lang:
+          type: string
+          maxLength: 2
+          description: Game language code (ISO 639-1)
+
+    # ── Balance ─────────────────────────────────────────────────────────────
+    BalanceRequest:
+      type: object
+      required: [token, user_id, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        currency:
+          $ref: '#/components/schemas/Currency'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    BalanceResponse:
+      type: object
+      required: [status, balance, currency, signature]
+      properties:
+        status:
+          type: boolean
+        balance:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: User balance after operation
+        currency:
+          $ref: '#/components/schemas/Currency'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Bet ──────────────────────────────────────────────────────────────────
+    BetRequest:
+      type: object
+      required: [token, user_id, game_id, round_id, transaction_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+            Numeration must be transparent throughout all bets and wins.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the operation
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Bet amount (must be > 0)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Free Spin Bet ─────────────────────────────────────────────────────────
+    FreeSpinBetRequest:
+      type: object
+      required: [token, user_id, game_id, round_id, transaction_id, free_spin_offer_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the operation
+        free_spin_offer_id:
+          type: string
+          description: Offer id of the free spin promotion
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: >
+            Nominal bet amount of the free spin. Some providers send the
+            bet level value (> 0), others send 0 since no funds are
+            deducted from the player's wallet.
+        currency:
+          $ref: '#/components/schemas/Currency'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Win ───────────────────────────────────────────────────────────────────
+    WinRequest:
+      type: object
+      required: [token, user_id, round_id, transaction_id, bet_transaction_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the operation
+        bet_transaction_id:
+          type: string
+          maxLength: 255
+          description: Transaction ID of the original bet being settled
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross win amount before tax (0 for lost bets, > 0 for wins)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Free Spin Win ──────────────────────────────────────────────────────────
+    FreeSpinWinRequest:
+      type: object
+      required: [token, user_id, round_id, transaction_id, free_spin_offer_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the operation
+        free_spin_offer_id:
+          type: string
+          description: Offer id of the free-spin promotion
+        bet_transaction_id:
+          type: string
+          maxLength: 255
+          description: Transaction ID of the original free-spin bet (optional, for traceability)
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross win amount before tax (0 for lost bets, > 0 for wins)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Tournament Win ────────────────────────────────────────────────────────
+    TournamentWinRequest:
+      type: object
+      required: [token, user_id, round_id, transaction_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the operation
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross tournament win amount before tax (must be > 0)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Jackpot Win ───────────────────────────────────────────────────────────
+    JackpotWinRequest:
+      type: object
+      required: [token, user_id, round_id, transaction_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the operation
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross jackpot win amount before tax (must be > 0)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Refund ────────────────────────────────────────────────────────────────
+    RefundRequest:
+      type: object
+      required: [token, user_id, type, round_id, transaction_id, original_transaction_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        type:
+          type: string
+          enum: [bet, win]
+          description: >
+            Type of the original transaction being refunded:
+            `bet` — cancels a bet (credits the player),
+            `win` — cancels a win (debits the player).
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: integer
+          format: int64
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the refund operation
+        original_transaction_id:
+          type: string
+          maxLength: 255
+          description: Transaction ID of the original bet or win being refunded
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Refund amount (must be > 0)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Shared response schemas ───────────────────────────────────────────────
+    TransactionResponse:
+      type: object
+      required: [status, operation_id, balance, currency, signature]
+      properties:
+        status:
+          type: boolean
+          description: "true on success"
+        operation_id:
+          oneOf:
+            - type: integer
+              format: int64
+            - type: string
+          description: Unique transaction identifier from the operator's system
+        balance:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: User balance after the operation
+        currency:
+          $ref: '#/components/schemas/Currency'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    ErrorResponse:
+      type: object
+      required: [status, code, message, signature]
+      properties:
+        status:
+          type: boolean
+          const: false
+          description: Always false for errors
+        code:
+          type: integer
+          description: |
+            Error code:
+            - 0 — Server error (retry)
+            - 1 — Insufficient funds (display error, terminate session)
+            - 2 — Currency mismatch (terminate session)
+            - 3 — User not found / not allowed (terminate session)
+            - 4 — Invalid or expired token (terminate session / prompt parent page reload)
+            - 5 — Invalid signature (malformed packet)
+            - 6 — Original transaction not found (referenced bet or win does not exist; re-send and retry, or terminate)
+            - 7 — Transaction duplication
+            - 8 — Loss limit reached
+            - 9 — Max bet limit reached
+          enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        message:
+          type: string
+          maxLength: 255
+          description: Human-readable error message
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+  # ---------------------------------------------------------------------------
+  # Security schemes (informational — signature is in-body, not a header)
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    signatureAuth:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: >
+        All requests are authenticated via an in-body `signature` field
+        (MD5 of sorted fields + salt). This security scheme is declared
+        for documentation purposes; the actual signature is part of each
+        request/response body.
+
+tags:
+  - name: Provider API
+    description: |
+      Operator → Provider. Game launch and content delivery endpoints
+      hosted by the Game Provider.
+  - name: Operator Wallet API
+    description: |
+      Provider → Operator. Seamless Wallet endpoints implemented
+      by the Operator. Includes session authentication, balance
+      checks, and all transaction operations (bet, win, refund).
