@@ -369,7 +369,7 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               game_id: "1056"
-              round_id: 123456
+              round_id: "123456"
               transaction_id: "97401685"
               amount: "10.50"
               currency: "UAH"
@@ -418,7 +418,7 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               game_id: "1056"
-              round_id: 123456
+              round_id: "123456"
               transaction_id: "97401685"
               amount: "10.00"
               currency: "UAH"
@@ -472,7 +472,7 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               game_id: "1056"
-              round_id: 123456
+              round_id: "123456"
               transaction_id: "97401686"
               bet_transaction_id: "97401685"
               amount: "20.00"
@@ -533,7 +533,7 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               game_id: "1056"
-              round_id: 123456
+              round_id: "123456"
               transaction_id: "97401686"
               free_spin_offer_id: "iery98eydias-fkljfo8e-ueg6"
               amount: "20.00"
@@ -581,7 +581,7 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               game_id: "1056"
-              round_id: 123456
+              round_id: "123456"
               transaction_id: "97401686"
               amount: "20.00"
               currency: "UAH"
@@ -628,7 +628,7 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               game_id: "1056"
-              round_id: 123456
+              round_id: "123456"
               transaction_id: "97401686"
               amount: "20.00"
               currency: "UAH"
@@ -685,7 +685,7 @@ paths:
                   user_id: "123_UAH"
                   type: "bet"
                   game_id: "1056"
-                  round_id: 123457
+                  round_id: "123457"
                   transaction_id: "97401687"
                   original_transaction_id: "97401685"
                   amount: "10.00"
@@ -698,7 +698,7 @@ paths:
                   user_id: "123_UAH"
                   type: "win"
                   game_id: "1056"
-                  round_id: 123456
+                  round_id: "123456"
                   transaction_id: "97401688"
                   original_transaction_id: "97401686"
                   amount: "20.00"
@@ -980,8 +980,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
@@ -1018,8 +1018,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
@@ -1063,8 +1063,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
@@ -1107,8 +1107,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
@@ -1155,8 +1155,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
@@ -1195,8 +1195,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
@@ -1243,8 +1243,8 @@ components:
           maxLength: 255
           description: Identifier of the game
         round_id:
-          type: integer
-          format: int64
+          type: string
+          maxLength: 255
           description: |
             Round identifier linking bets to wins. Must be unique between rounds.
         transaction_id:
