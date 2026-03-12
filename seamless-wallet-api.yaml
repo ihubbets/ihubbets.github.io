@@ -134,10 +134,10 @@ paths:
           schema:
             type: string
             maxLength: 255
-        - name: back_url
+        - name: lobby_url
           in: query
           required: true
-          description: URL for redirection to casino lobby when the player clicks Home
+          description: URL for redirection to the casino lobby when the player exits the game
           schema:
             type: string
             format: uri
