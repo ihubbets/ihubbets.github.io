@@ -17,43 +17,56 @@ info:
 
     ## Signature
 
-    All requests and responses include a `signature` field — a packet integrity
-    validation hash. The algorithm:
+    All requests and responses are signed via the `X-Signature` HTTP header —
+    an HMAC-SHA256 hash of the **raw request/response body** ensuring packet
+    integrity and authenticity.
 
-    1. Collect all request/response body fields into a flat key-value map
-    2. Add the shared `salt` (provided during integration onboarding)
-    3. Sort the map alphabetically by key (`ksort`)
-    4. Concatenate all **values** (not keys) into a single string
-    5. Compute `md5()` of the resulting string
+    The signature is computed over the raw body bytes as sent over the wire —
+    no JSON parsing, sorting, or field manipulation is needed.
+
+    **Algorithm:**
+
+    1. Read the raw HTTP body as a byte string
+    2. Compute `HMAC-SHA256` of that byte string using the shared secret key
+    3. Send/verify the result as a **64-character lowercase hex string**
+       in the `X-Signature` header
 
     **PHP example:**
 
     ```php
-    $data = [
-        "currency"  => "EUR",
-        "token"     => "a172bb59a80dde62889950bc289b9640",
-        "user_id"   => "123_UAH",
-        // ... other fields ...
-        "salt"      => "*some secret salt*"
-    ];
-    ksort($data);
-    $signature = md5(implode('', $data));
+    // --- Sending ---
+    $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $signature = hash_hmac('sha256', $body, $secretKey);
+    // Set header: X-Signature: $signature
+    // Send body: $body
+
+    // --- Receiving ---
+    $rawBody = file_get_contents('php://input');
+    $expected = hash_hmac('sha256', $rawBody, $secretKey);
+    $received = $_SERVER['HTTP_X_SIGNATURE'] ?? '';
+
+    if (!hash_equals($expected, $received)) {
+        // Respond with error code 5 — Invalid signature
+    }
+
+    $payload = json_decode($rawBody, true);
     ```
 
     **Pseudocode (language-agnostic):**
 
     ```
-    fields = { ...request_body, "salt": SHARED_SECRET }
-    sorted_values = sort_by_key(fields).values()
-    signature = md5(concat(sorted_values))
+    signature = hmac_sha256(raw_body_bytes, SECRET_KEY)
+    set_header("X-Signature", signature)
     ```
 
-    > **Note:** The `salt` key is included in the sorted map for hashing but is
-    > never sent in the request/response body. Both sides (Provider and Operator)
-    > must use the same salt to produce matching signatures.
+    > **Note:** The secret key is provided during integration onboarding.
+    > Both sides (Provider and Operator) must use the same key. Always use
+    > timing-safe comparison (e.g. `hash_equals` in PHP) when verifying
+    > signatures. The raw body must not be modified by middleware (no
+    > re-encoding or pretty-printing) between signing and verification.
 
     **Idempotency:** All wallet transaction endpoints (`/bet`, `/win`,
-    `/freespin-bet`, `/freespin-win`, `/tournament-win`, `/jackpot-win`,
+    `/free-spin-bet`, `/free-spin-win`, `/tournament-win`, `/jackpot-win`,
     `/refund`) are idempotent on `transaction_id`. If the Operator receives
     a request with a `transaction_id` that has already been successfully
     processed, it **must** return the original `TransactionResponse`
@@ -205,25 +218,29 @@ paths:
               currency: "UAH"
               free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
               expires_at: "2025-12-31T23:59:59Z"
-              signature: "c215c88dcc3e94627fcc9c8010523b88"
+
       responses:
         '200':
           description: Free-spin offer created
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
               example:
                 status: true
-                signature: "3dffec7181b642b1d74726d4d076a204"
+  
         '200#error':
           description: Free-spin offer creation failed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -231,7 +248,7 @@ paths:
               example:
                 status: false
                 message: "Game not found"
-                signature: "3dffec7181b642b1d74726d4d076a204"
+  
 
   # -------------------------------------------------------------------------
   # Cancel Free Spin Offer
@@ -259,25 +276,29 @@ paths:
               $ref: '#/components/schemas/CancelFreeSpinOfferRequest'
             example:
               free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-              signature: "85eca54b273fcc95424e76d8543e0fed"
+
       responses:
         '200':
           description: Free-spin offer cancelled
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
               example:
                 status: true
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
         '200#error':
           description: Cancellation failed (e.g. offer not found or already fully used)
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -285,7 +306,7 @@ paths:
               example:
                 status: false
                 message: "Offer not found or already completed"
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
 
   # =========================================================================
   # Operator Wallet API (Provider → Operator)
@@ -311,13 +332,15 @@ paths:
               $ref: '#/components/schemas/AuthRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              signature: "3dffec7181b642b1d74726d4d076a204"
+
       responses:
         '200':
           description: Successful authentication
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -330,9 +353,14 @@ paths:
                 currency: "UAH"
                 language: "uk"
                 test_user: false
-                signature: "3dffec7181b642b1d74726d4d076a204"
+  
         '200#error':
           description: Authentication failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -357,13 +385,15 @@ paths:
               token: "704be4er164ef34cc56ccbb64a960868"
               user_id: "123_UAH"
               currency: "UAH"
-              signature: "3dffec7181b642b1d74726d4d076a204"
+
       responses:
         '200':
           description: Balance retrieved
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -372,9 +402,14 @@ paths:
                 status: true
                 balance: "98947.93"
                 currency: "UAH"
-                signature: "3dff3c7181b642b1d74726d4f076a1b2"
+
         '200#error':
           description: Balance check failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -405,13 +440,15 @@ paths:
               transaction_id: "97401685"
               amount: "10.50"
               currency: "UAH"
-              signature: "c215c88dcc3e94627fcc9c8010523b88"
+
       responses:
         '200':
           description: Bet placed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -421,9 +458,14 @@ paths:
                 balance: "9894693.00"
                 transaction_id: "17513312722"
                 currency: "UAH"
-                signature: "c215c88dcc3e94627fcc9c8010523b88"
+  
         '200#error':
           description: Bet failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -455,13 +497,15 @@ paths:
               amount: "10.00"
               currency: "UAH"
               free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-              signature: "c215c88dcc3e94627fcc9c8010523b88"
+
       responses:
         '200':
           description: Free-spin bet placed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -471,9 +515,14 @@ paths:
                 transaction_id: "17513312722"
                 balance: "98946.93"
                 currency: "UAH"
-                signature: "c215c88dcc3e94627fcc9c8010523b88"
+  
         '200#error':
           description: Free-spin bet failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -519,13 +568,15 @@ paths:
                 - type: "military_levy"
                   percent: "5.00"
                   amount: "1.00"
-              signature: "85eca54b273fcc95424e76d8543e0fed"
+
       responses:
         '200':
           description: Win processed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -535,9 +586,14 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
         '200#error':
           description: Win processing failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -577,13 +633,15 @@ paths:
               bet_transaction_id: "97401685"
               amount: "20.00"
               currency: "UAH"
-              signature: "85eca54b273fcc95424e76d8543e0fed"
+
       responses:
         '200':
           description: Free-spin win processed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -593,9 +651,14 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
         '200#error':
           description: Free-spin win processing failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -624,13 +687,15 @@ paths:
               transaction_id: "97401686"
               amount: "20.00"
               currency: "UAH"
-              signature: "85eca54b273fcc95424e76d8543e0fed"
+
       responses:
         '200':
           description: Tournament win processed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -640,9 +705,14 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
         '200#error':
           description: Tournament win processing failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -671,13 +741,15 @@ paths:
               transaction_id: "97401686"
               amount: "20.00"
               currency: "UAH"
-              signature: "85eca54b273fcc95424e76d8543e0fed"
+
       responses:
         '200':
           description: Jackpot win processed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -687,9 +759,14 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
         '200#error':
           description: Jackpot win processing failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -729,7 +806,7 @@ paths:
                   original_transaction_id: "97401685"
                   amount: "10.00"
                   currency: "UAH"
-                  signature: "85eca54b273fcc95424e76d8543e0fed"
+    
               win_refund:
                 summary: Cancel a win
                 value:
@@ -742,13 +819,14 @@ paths:
                   original_transaction_id: "97401686"
                   amount: "20.00"
                   currency: "UAH"
-                  signature: "a3f5c88dcc3e94627fcc9c8010523b99"
       responses:
         '200':
           description: Refund processed
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -758,9 +836,14 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0af7"
+
         '200#error':
           description: Refund failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
           content:
             application/json:
               schema:
@@ -777,23 +860,31 @@ components:
   headers:
     InternalRequestId:
       description: Unique request identifier for quick transaction search on the operator's side
+      required: true
       schema:
         type: string
+    XSignature:
+      description: >
+        HMAC-SHA256 hex digest of the raw HTTP body using the shared secret key.
+        Required on all requests and responses.
+      required: true
+      schema:
+        $ref: '#/components/schemas/Signature'
 
   # ---------------------------------------------------------------------------
   # Schemas
   # ---------------------------------------------------------------------------
   schemas:
 
-    # ── Signature field (reusable) ──────────────────────────────────────────
+    # ── Signature (kept for reference in X-Signature header schema) ─────────
     Signature:
       type: string
-      minLength: 32
-      maxLength: 32
-      pattern: '^[0-9a-fA-F]{32}$'
+      minLength: 64
+      maxLength: 64
+      pattern: '^[0-9a-f]{64}$'
       description: >
-        MD5 hash of all packet fields sorted alphabetically (ksort)
-        and concatenated with the shared salt.
+        HMAC-SHA256 hex digest of the raw HTTP body using the shared
+        secret key. Sent/received as the `X-Signature` header.
 
     # ── Currency field (reusable) ───────────────────────────────────────────
     Currency:
@@ -847,7 +938,7 @@ components:
     # ── Free Spin Offer (Provider API) ─────────────────────────────────────
     CreateFreeSpinOfferRequest:
       type: object
-      required: [user_id, game_id, spin_count, bet_value, currency, free_spin_offer_id, expires_at, signature]
+      required: [user_id, game_id, spin_count, bet_value, currency, free_spin_offer_id, expires_at]
       properties:
         user_id:
           type: string
@@ -881,33 +972,30 @@ components:
           type: string
           format: date-time
           description: Offer expiration date-time (ISO 8601)
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     CancelFreeSpinOfferRequest:
       type: object
-      required: [free_spin_offer_id, signature]
+      required: [free_spin_offer_id]
       properties:
         free_spin_offer_id:
           type: string
           format: uuid
           description: Free-spin offer identifier provided via `/create-free-spins`
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     FreeSpinOfferStatusResponse:
       type: object
-      required: [status, signature]
+      required: [status]
       properties:
         status:
           type: boolean
           description: "true on success, false on failure"
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     FreeSpinOfferErrorResponse:
       type: object
-      required: [status, message, signature]
+      required: [status, message]
       properties:
         status:
           type: boolean
@@ -916,27 +1004,24 @@ components:
           type: string
           maxLength: 255
           description: Human-readable error message
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Auth ────────────────────────────────────────────────────────────────
     AuthRequest:
       type: object
-      required: [token, signature]
+      required: [token]
       properties:
         token:
           type: string
           maxLength: 255
           description: Gaming session token (real game only)
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     AuthResponse:
       type: object
-      required: [signature, status, user_id, user_name, test_user, balance, currency, language]
+      required: [status, user_id, user_name, test_user, balance, currency, language]
       properties:
-        signature:
-          $ref: '#/components/schemas/Signature'
+
         status:
           type: boolean
           description: "true on success, false on failure"
@@ -968,7 +1053,7 @@ components:
     # ── Balance ─────────────────────────────────────────────────────────────
     BalanceRequest:
       type: object
-      required: [token, user_id, currency, signature]
+      required: [token, user_id, currency]
       properties:
         token:
           type: string
@@ -982,12 +1067,11 @@ components:
             (e.g. 123_UAH, 45678_EUR).
         currency:
           $ref: '#/components/schemas/Currency'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     BalanceResponse:
       type: object
-      required: [status, balance, currency, signature]
+      required: [status, balance, currency]
       properties:
         status:
           type: boolean
@@ -998,13 +1082,12 @@ components:
           description: User balance after the operation
         currency:
           $ref: '#/components/schemas/Currency'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Bet ──────────────────────────────────────────────────────────────────
     BetRequest:
       type: object
-      required: [token, user_id, game_id, round_id, transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, amount, currency]
       properties:
         token:
           type: string
@@ -1043,13 +1126,12 @@ components:
             Indicates that this is the last transaction in the round.
             When true, the Operator may finalize the round for reporting
             and reconciliation.
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Free Spin Bet ─────────────────────────────────────────────────────────
     FreeSpinBetRequest:
       type: object
-      required: [token, user_id, game_id, round_id, transaction_id, free_spin_offer_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, free_spin_offer_id, amount, currency]
       properties:
         token:
           type: string
@@ -1095,13 +1177,12 @@ components:
             Indicates that this is the last transaction in the round.
             When true, the Operator may finalize the round for reporting
             and reconciliation.
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Win ───────────────────────────────────────────────────────────────────
     WinRequest:
       type: object
-      required: [token, user_id, game_id, round_id, transaction_id, bet_transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, bet_transaction_id, amount, currency]
       properties:
         token:
           type: string
@@ -1146,13 +1227,12 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Free Spin Win ──────────────────────────────────────────────────────────
     FreeSpinWinRequest:
       type: object
-      required: [token, user_id, game_id, round_id, transaction_id, free_spin_offer_id, bet_transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, free_spin_offer_id, bet_transaction_id, amount, currency]
       properties:
         token:
           type: string
@@ -1201,13 +1281,12 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Tournament Win ────────────────────────────────────────────────────────
     TournamentWinRequest:
       type: object
-      required: [token, user_id, game_id, round_id, transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, amount, currency]
       properties:
         token:
           type: string
@@ -1248,13 +1327,12 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Jackpot Win ───────────────────────────────────────────────────────────
     JackpotWinRequest:
       type: object
-      required: [token, user_id, game_id, round_id, transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, amount, currency]
       properties:
         token:
           type: string
@@ -1295,13 +1373,12 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Refund ────────────────────────────────────────────────────────────────
     RefundRequest:
       type: object
-      required: [token, user_id, type, game_id, round_id, transaction_id, original_transaction_id, amount, currency, signature]
+      required: [token, user_id, type, game_id, round_id, transaction_id, original_transaction_id, amount, currency]
       properties:
         token:
           type: string
@@ -1352,13 +1429,12 @@ components:
             Indicates that this is the last transaction in the round.
             When true, the Operator may finalize the round for reporting
             and reconciliation.
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     # ── Shared response schemas ───────────────────────────────────────────────
     TransactionResponse:
       type: object
-      required: [status, transaction_id, balance, currency, signature]
+      required: [status, transaction_id, balance, currency]
       properties:
         status:
           type: boolean
@@ -1376,12 +1452,11 @@ components:
           description: User balance after the operation
         currency:
           $ref: '#/components/schemas/Currency'
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
     ErrorResponse:
       type: object
-      required: [status, code, message, signature]
+      required: [status, code, message]
       properties:
         status:
           type: boolean
@@ -1396,7 +1471,7 @@ components:
             - 2 — Currency mismatch (terminate session)
             - 3 — User not found / not allowed (terminate session)
             - 4 — Invalid or expired token (terminate session / prompt parent page reload)
-            - 5 — Invalid signature (malformed packet)
+            - 5 — Invalid signature (X-Signature header missing or mismatch)
             - 6 — Original transaction not found (referenced bet or win does not exist; re-send and retry, or terminate)
             - 8 — Loss limit reached
             - 9 — Max bet limit reached
@@ -1405,8 +1480,7 @@ components:
           type: string
           maxLength: 255
           description: Human-readable error message
-        signature:
-          $ref: '#/components/schemas/Signature'
+
 
 
 tags:
