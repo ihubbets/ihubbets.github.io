@@ -74,7 +74,7 @@ info:
     and the current balance) — not an error.
     This ensures safe retries over unreliable networks.
 
-    **Response header:** All responses contain an `internal-request-id` header —
+    **Response header:** All responses contain an `X-Request-Id` header —
     a unique request identifier for quick transaction lookup on the operator's side.
 
 servers:
@@ -204,6 +204,8 @@ paths:
           variables:
             providerHost:
               default: games.provider.com
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -223,8 +225,8 @@ paths:
         '200':
           description: Free-spin offer created
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -237,8 +239,8 @@ paths:
         '200#error':
           description: Free-spin offer creation failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -268,6 +270,8 @@ paths:
           variables:
             providerHost:
               default: games.provider.com
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -281,8 +285,8 @@ paths:
         '200':
           description: Free-spin offer cancelled
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -295,8 +299,8 @@ paths:
         '200#error':
           description: Cancellation failed (e.g. offer not found or already fully used)
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -324,6 +328,8 @@ paths:
         Called on user logon to get relevant data for processing and
         validate received data from launcher information.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -337,8 +343,8 @@ paths:
         '200':
           description: Successful authentication
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -357,8 +363,8 @@ paths:
         '200#error':
           description: Authentication failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -375,6 +381,8 @@ paths:
       summary: Check player balance
       description: Returns the current balance of the player.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -390,8 +398,8 @@ paths:
         '200':
           description: Balance retrieved
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -406,8 +414,8 @@ paths:
         '200#error':
           description: Balance check failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -426,6 +434,8 @@ paths:
         Deducts the bet amount from the player's balance.
         The `amount` must always be > 0.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -445,8 +455,8 @@ paths:
         '200':
           description: Bet placed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -462,8 +472,8 @@ paths:
         '200#error':
           description: Bet failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -482,6 +492,8 @@ paths:
         Places a bet within a free-spin offer. The `amount` carries the nominal
         bet level of the spin; some providers send 0 when no funds are deducted.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -502,8 +514,8 @@ paths:
         '200':
           description: Free-spin bet placed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -519,8 +531,8 @@ paths:
         '200#error':
           description: Free-spin bet failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -546,6 +558,8 @@ paths:
           transaction not found) — in that case no corresponding bet exists
           and retrying is pointless.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -573,8 +587,8 @@ paths:
         '200':
           description: Win processed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -590,8 +604,8 @@ paths:
         '200#error':
           description: Win processing failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -617,6 +631,8 @@ paths:
           transaction not found) — in that case no corresponding bet exists
           and retrying is pointless.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -638,8 +654,8 @@ paths:
         '200':
           description: Free-spin win processed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -655,8 +671,8 @@ paths:
         '200#error':
           description: Free-spin win processing failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -673,6 +689,8 @@ paths:
       summary: Place a tournament win
       description: Credits the tournament win amount to the player's balance.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -692,8 +710,8 @@ paths:
         '200':
           description: Tournament win processed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -709,8 +727,8 @@ paths:
         '200#error':
           description: Tournament win processing failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -727,6 +745,8 @@ paths:
       summary: Place a jackpot win
       description: Credits the jackpot win amount to the player's balance.
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -746,8 +766,8 @@ paths:
         '200':
           description: Jackpot win processed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -763,8 +783,8 @@ paths:
         '200#error':
           description: Jackpot win processing failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -787,6 +807,8 @@ paths:
         - `bet` — cancels a bet, credits the amount back to the player
         - `win` — cancels a win, debits the amount from the player
       tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
       requestBody:
         required: true
         content:
@@ -823,8 +845,8 @@ paths:
         '200':
           description: Refund processed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -840,8 +862,8 @@ paths:
         '200#error':
           description: Refund failed
           headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
             X-Signature:
               $ref: '#/components/headers/XSignature'
           content:
@@ -855,10 +877,24 @@ paths:
 components:
 
   # ---------------------------------------------------------------------------
-  # Headers
+  # Parameters (request headers)
+  # ---------------------------------------------------------------------------
+  parameters:
+    XSignatureParam:
+      name: X-Signature
+      in: header
+      required: true
+      description: >
+        HMAC-SHA256 hex digest of the raw HTTP request body using the shared
+        secret key.
+      schema:
+        $ref: '#/components/schemas/Signature'
+
+  # ---------------------------------------------------------------------------
+  # Headers (response headers)
   # ---------------------------------------------------------------------------
   headers:
-    InternalRequestId:
+    XRequestId:
       description: Unique request identifier for quick transaction search on the operator's side
       required: true
       schema:
