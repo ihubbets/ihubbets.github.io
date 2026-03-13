@@ -213,7 +213,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateFreeSpinOfferRequest'
             example:
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               spin_count: 20
               bet_value: "0.50"
@@ -353,7 +353,7 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
               example:
                 status: true
-                user_id: "123456_UAH"
+                user_id: 123456
                 user_name: "Taras Shevchenko"
                 balance: "98947.93"
                 currency: "UAH"
@@ -391,7 +391,7 @@ paths:
               $ref: '#/components/schemas/BalanceRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               currency: "UAH"
 
       responses:
@@ -444,7 +444,7 @@ paths:
               $ref: '#/components/schemas/BetRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401685"
@@ -502,7 +502,7 @@ paths:
               $ref: '#/components/schemas/FreeSpinBetRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401685"
@@ -568,7 +568,7 @@ paths:
               $ref: '#/components/schemas/WinRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401686"
@@ -641,7 +641,7 @@ paths:
               $ref: '#/components/schemas/FreeSpinWinRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401686"
@@ -699,7 +699,7 @@ paths:
               $ref: '#/components/schemas/TournamentWinRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401686"
@@ -755,7 +755,7 @@ paths:
               $ref: '#/components/schemas/JackpotWinRequest'
             example:
               token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
+              user_id: 123
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401686"
@@ -820,7 +820,7 @@ paths:
                 summary: Refund a bet
                 value:
                   token: "704be4er164ef34cc56ccbb64a960868"
-                  user_id: "123_UAH"
+                  user_id: 123
                   type: "bet"
                   game_id: "1056"
                   round_id: "123457"
@@ -833,7 +833,7 @@ paths:
                 summary: Cancel a win
                 value:
                   token: "704be4er164ef34cc56ccbb64a960868"
-                  user_id: "123_UAH"
+                  user_id: 123
                   type: "win"
                   game_id: "1056"
                   round_id: "123456"
@@ -977,11 +977,9 @@ components:
       required: [user_id, game_id, spin_count, bet_value, currency, free_spin_offer_id, expires_at]
       properties:
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1062,11 +1060,9 @@ components:
           type: boolean
           description: "true on success, false on failure"
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         user_name:
           type: string
           maxLength: 255
@@ -1096,11 +1092,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         currency:
           $ref: '#/components/schemas/Currency'
 
@@ -1130,11 +1124,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1174,11 +1166,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1225,11 +1215,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1275,11 +1263,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1329,11 +1315,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1375,11 +1359,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         game_id:
           type: string
           maxLength: 255
@@ -1421,11 +1403,9 @@ components:
           maxLength: 255
           description: Gaming session token (real game only)
         user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
         type:
           type: string
           maxLength: 50
