@@ -99,6 +99,12 @@ paths:
         frontend to start a real or demo game session.
 
         The game provider must support auto-resize of game content and mobile games.
+
+        **Example request URL:**
+
+        ```
+        https://games.provider.com/launch-game?action=real&game_id=1056&token=704be4er164ef34cc56ccbb64a960868&lobby_url=https%3A%2F%2Fcasino.operator.com%2Flobby&language=uk
+        ```
       tags: [Provider API]
       servers:
         - url: https://{providerHost}
@@ -222,6 +228,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
+              example:
+                status: false
+                message: "Game not found"
+                signature: "3dffec7181b642b1d74726d4d076a204"
 
   # -------------------------------------------------------------------------
   # Cancel Free Spin Offer
@@ -264,7 +274,7 @@ paths:
                 status: true
                 signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
-          description: Cancellation failed
+          description: Cancellation failed (e.g. offer not found or already fully used)
           headers:
             internal-request-id:
               $ref: '#/components/headers/InternalRequestId'
@@ -272,6 +282,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
+              example:
+                status: false
+                message: "Offer not found or already completed"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
 
   # =========================================================================
   # Operator Wallet API (Provider → Operator)
@@ -466,57 +480,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # -------------------------------------------------------------------------
-  # Bonus Bet
-  # -------------------------------------------------------------------------
-  /bonus-bet:
-    post:
-      operationId: bonusBet
-      summary: Place a bonus bet
-      description: |
-        Deducts the bet amount from the player's bonus balance.
-        The `bonus_id` links the bet to a specific bonus campaign on the
-        Operator's side for wagering requirement tracking and reporting.
-      tags: [Operator Wallet API]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BonusBetRequest'
-            example:
-              token: "704be4er164ef34cc56ccbb64a960868"
-              user_id: "123_UAH"
-              game_id: "1056"
-              round_id: "123456"
-              transaction_id: "97401689"
-              bonus_id: "b9c8d7e6-f5a4-3210-fedc-ba9876543210"
-              amount: "5.00"
-              currency: "UAH"
-              signature: "c215c88dcc3e94627fcc9c8010523b88"
-      responses:
-        '200':
-          description: Bonus bet placed
-          headers:
-            internal-request-id:
-              $ref: '#/components/headers/InternalRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312724"
-                balance: "98941.93"
-                currency: "UAH"
-                signature: "c215c88dcc3e94627fcc9c8010523b88"
-        '200#error':
-          description: Bonus bet failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  # -------------------------------------------------------------------------
   # Win
   # -------------------------------------------------------------------------
   /win:
@@ -529,7 +492,10 @@ paths:
         **Important rules:**
         - Win with amount = 0 is required for lost bets.
         - Wins without corresponding bets will not be processed.
-        - Wins must be repeated until a response with success is received.
+        - Wins must be repeated until a response with success is received,
+          except when the Operator responds with error code 6 (original
+          transaction not found) — in that case no corresponding bet exists
+          and retrying is pointless.
       tags: [Operator Wallet API]
       requestBody:
         required: true
@@ -590,7 +556,10 @@ paths:
         **Important rules:**
         - Win with amount = 0 is required for lost bets.
         - Wins without corresponding bets will not be processed.
-        - Wins must be repeated until a response with success is received.
+        - Wins must be repeated until a response with success is received,
+          except when the Operator responds with error code 6 (original
+          transaction not found) — in that case no corresponding bet exists
+          and retrying is pointless.
       tags: [Operator Wallet API]
       requestBody:
         required: true
@@ -1129,58 +1098,6 @@ components:
         signature:
           $ref: '#/components/schemas/Signature'
 
-    # ── Bonus Bet ──────────────────────────────────────────────────────────────
-    BonusBetRequest:
-      type: object
-      required: [token, user_id, game_id, round_id, transaction_id, bonus_id, amount, currency, signature]
-      properties:
-        token:
-          type: string
-          maxLength: 255
-          description: Gaming session token (real game only)
-        user_id:
-          type: string
-          maxLength: 255
-          description: >-
-            Unique player identifier on Operator's side
-            (e.g. 123_UAH, 45678_EUR).
-        game_id:
-          type: string
-          maxLength: 255
-          description: Identifier of the game
-        round_id:
-          type: string
-          maxLength: 255
-          description: |
-            Round identifier linking bets to wins. Must be unique between rounds.
-        transaction_id:
-          type: string
-          maxLength: 255
-          description: Unique identifier of the transaction
-        bonus_id:
-          type: string
-          format: uuid
-          description: >
-            Bonus campaign identifier on the Operator's side. Used to track
-            wagering requirements and apply bonus-specific rules (win caps,
-            withdrawal restrictions).
-        amount:
-          type: string
-          format: decimal
-          pattern: '^\d+\.\d{1,8}$'
-          description: Bonus bet amount (must be > 0)
-        currency:
-          $ref: '#/components/schemas/Currency'
-        round_finished:
-          type: boolean
-          default: false
-          description: >
-            Indicates that this is the last transaction in the round.
-            When true, the Operator may finalize the round for reporting
-            and reconciliation.
-        signature:
-          $ref: '#/components/schemas/Signature'
-
     # ── Win ───────────────────────────────────────────────────────────────────
     WinRequest:
       type: object
@@ -1497,6 +1414,12 @@ tags:
     description: |
       Operator → Provider. Game launch and content delivery endpoints
       hosted by the Game Provider.
+
+      During integration onboarding the Provider must supply a **base URL**
+      (e.g. `https://games.provider.com` or `https://games.provider.com/api/v1`).
+      All Provider API paths in this spec are appended to that base URL.
+      The Operator stores this value per provider and uses it for every
+      outgoing request.
   - name: Operator Wallet API
     description: |
       Provider → Operator. Seamless Wallet endpoints implemented
