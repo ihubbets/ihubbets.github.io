@@ -52,8 +52,14 @@ info:
     > never sent in the request/response body. Both sides (Provider and Operator)
     > must use the same salt to produce matching signatures.
 
-    **Idempotency:** Duplicate transaction requests return the original `transaction_id`
-    and the current user balance.
+    **Idempotency:** All wallet transaction endpoints (`/bet`, `/win`,
+    `/freespin-bet`, `/freespin-win`, `/tournament-win`, `/jackpot-win`,
+    `/refund`) are idempotent on `transaction_id`. If the Operator receives
+    a request with a `transaction_id` that has already been successfully
+    processed, it **must** return the original `TransactionResponse`
+    (with `status: true`, the original operator-side `transaction_id`,
+    and the current balance) — not an error.
+    This ensures safe retries over unreliable networks.
 
     **Response header:** All responses contain an `internal-request-id` header —
     a unique request identifier for quick transaction lookup on the operator's side.
@@ -197,6 +203,9 @@ paths:
       responses:
         '200':
           description: Free-spin offer created
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
           content:
             application/json:
               schema:
@@ -206,6 +215,9 @@ paths:
                 signature: "3dffec7181b642b1d74726d4d076a204"
         '200#error':
           description: Free-spin offer creation failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
           content:
             application/json:
               schema:
@@ -236,20 +248,26 @@ paths:
             schema:
               $ref: '#/components/schemas/CancelFreeSpinOfferRequest'
             example:
-              free_spin_offer_id: "aeoif24-dflaep1-34k3l"
+              free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
               signature: "85eca54b273fcc95424e76d8543e0fed"
       responses:
         '200':
           description: Free-spin offer cancelled
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
               example:
                 status: true
-                signature: "45eca54b273fcc95424e76d8543e0gt7"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
           description: Cancellation failed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
           content:
             application/json:
               schema:
@@ -296,7 +314,7 @@ paths:
                 user_name: "Taras Shevchenko"
                 balance: "98947.93"
                 currency: "UAH"
-                lang: "uk"
+                language: "uk"
                 test_user: false
                 signature: "3dffec7181b642b1d74726d4d076a204"
         '200#error':
@@ -340,7 +358,7 @@ paths:
                 status: true
                 balance: "98947.93"
                 currency: "UAH"
-                signature: "3dff3c7181b642b1d74726d4f076ajk2"
+                signature: "3dff3c7181b642b1d74726d4f076a1b2"
         '200#error':
           description: Balance check failed
           content:
@@ -422,7 +440,7 @@ paths:
               transaction_id: "97401685"
               amount: "10.00"
               currency: "UAH"
-              free_spin_offer_id: "aeoif24-dflaep1-34k3l"
+              free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
               signature: "c215c88dcc3e94627fcc9c8010523b88"
       responses:
         '200':
@@ -442,6 +460,57 @@ paths:
                 signature: "c215c88dcc3e94627fcc9c8010523b88"
         '200#error':
           description: Free-spin bet failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Bonus Bet
+  # -------------------------------------------------------------------------
+  /bonus-bet:
+    post:
+      operationId: bonusBet
+      summary: Place a bonus bet
+      description: |
+        Deducts the bet amount from the player's bonus balance.
+        The `bonus_id` links the bet to a specific bonus campaign on the
+        Operator's side for wagering requirement tracking and reporting.
+      tags: [Operator Wallet API]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BonusBetRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: "123_UAH"
+              game_id: "1056"
+              round_id: "123456"
+              transaction_id: "97401689"
+              bonus_id: "b9c8d7e6-f5a4-3210-fedc-ba9876543210"
+              amount: "5.00"
+              currency: "UAH"
+              signature: "c215c88dcc3e94627fcc9c8010523b88"
+      responses:
+        '200':
+          description: Bonus bet placed
+          headers:
+            internal-request-id:
+              $ref: '#/components/headers/InternalRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                status: true
+                transaction_id: "17513312724"
+                balance: "98941.93"
+                currency: "UAH"
+                signature: "c215c88dcc3e94627fcc9c8010523b88"
+        '200#error':
+          description: Bonus bet failed
           content:
             application/json:
               schema:
@@ -500,7 +569,7 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0gt7"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
           description: Win processing failed
           content:
@@ -535,7 +604,8 @@ paths:
               game_id: "1056"
               round_id: "123456"
               transaction_id: "97401686"
-              free_spin_offer_id: "iery98eydias-fkljfo8e-ueg6"
+              free_spin_offer_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+              bet_transaction_id: "97401685"
               amount: "20.00"
               currency: "UAH"
               signature: "85eca54b273fcc95424e76d8543e0fed"
@@ -554,7 +624,7 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0gt7"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
           description: Free-spin win processing failed
           content:
@@ -601,7 +671,7 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0gt7"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
           description: Tournament win processing failed
           content:
@@ -648,7 +718,7 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0gt7"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
           description: Jackpot win processing failed
           content:
@@ -719,7 +789,7 @@ paths:
                 transaction_id: "17513312723"
                 balance: "98948.93"
                 currency: "UAH"
-                signature: "45eca54b273fcc95424e76d8543e0gt7"
+                signature: "45eca54b273fcc95424e76d8543e0af7"
         '200#error':
           description: Refund failed
           content:
@@ -749,7 +819,9 @@ components:
     # ── Signature field (reusable) ──────────────────────────────────────────
     Signature:
       type: string
+      minLength: 32
       maxLength: 32
+      pattern: '^[0-9a-fA-F]{32}$'
       description: >
         MD5 hash of all packet fields sorted alphabetically (ksort)
         and concatenated with the shared salt.
@@ -892,7 +964,7 @@ components:
 
     AuthResponse:
       type: object
-      required: [signature, status, user_id, user_name, test_user, balance, currency, lang]
+      required: [signature, status, user_id, user_name, test_user, balance, currency, language]
       properties:
         signature:
           $ref: '#/components/schemas/Signature'
@@ -919,7 +991,7 @@ components:
           description: User balance after the operation
         currency:
           $ref: '#/components/schemas/Currency'
-        lang:
+        language:
           type: string
           maxLength: 2
           description: Game language code (ISO 639-1)
@@ -995,6 +1067,13 @@ components:
           description: Bet amount (must be > 0)
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         signature:
           $ref: '#/components/schemas/Signature'
 
@@ -1040,13 +1119,72 @@ components:
             deducted from the player's wallet.
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    # ── Bonus Bet ──────────────────────────────────────────────────────────────
+    BonusBetRequest:
+      type: object
+      required: [token, user_id, game_id, round_id, transaction_id, bonus_id, amount, currency, signature]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: string
+          maxLength: 255
+          description: >-
+            Unique player identifier on Operator's side
+            (e.g. 123_UAH, 45678_EUR).
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: |
+            Round identifier linking bets to wins. Must be unique between rounds.
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        bonus_id:
+          type: string
+          format: uuid
+          description: >
+            Bonus campaign identifier on the Operator's side. Used to track
+            wagering requirements and apply bonus-specific rules (win caps,
+            withdrawal restrictions).
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Bonus bet amount (must be > 0)
+        currency:
+          $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         signature:
           $ref: '#/components/schemas/Signature'
 
     # ── Win ───────────────────────────────────────────────────────────────────
     WinRequest:
       type: object
-      required: [token, user_id, round_id, transaction_id, bet_transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, bet_transaction_id, amount, currency, signature]
       properties:
         token:
           type: string
@@ -1082,6 +1220,13 @@ components:
           description: Gross win amount before tax (0 for lost bets, > 0 for wins)
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
         signature:
@@ -1090,7 +1235,7 @@ components:
     # ── Free Spin Win ──────────────────────────────────────────────────────────
     FreeSpinWinRequest:
       type: object
-      required: [token, user_id, round_id, transaction_id, free_spin_offer_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, free_spin_offer_id, bet_transaction_id, amount, currency, signature]
       properties:
         token:
           type: string
@@ -1130,6 +1275,13 @@ components:
           description: Gross win amount before tax (0 for lost bets, > 0 for wins)
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
         signature:
@@ -1138,7 +1290,7 @@ components:
     # ── Tournament Win ────────────────────────────────────────────────────────
     TournamentWinRequest:
       type: object
-      required: [token, user_id, round_id, transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, amount, currency, signature]
       properties:
         token:
           type: string
@@ -1170,6 +1322,13 @@ components:
           description: Gross tournament win amount before tax (must be > 0)
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
         signature:
@@ -1178,7 +1337,7 @@ components:
     # ── Jackpot Win ───────────────────────────────────────────────────────────
     JackpotWinRequest:
       type: object
-      required: [token, user_id, round_id, transaction_id, amount, currency, signature]
+      required: [token, user_id, game_id, round_id, transaction_id, amount, currency, signature]
       properties:
         token:
           type: string
@@ -1210,6 +1369,13 @@ components:
           description: Gross jackpot win amount before tax (must be > 0)
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
         signature:
@@ -1218,7 +1384,7 @@ components:
     # ── Refund ────────────────────────────────────────────────────────────────
     RefundRequest:
       type: object
-      required: [token, user_id, type, round_id, transaction_id, original_transaction_id, amount, currency, signature]
+      required: [token, user_id, type, game_id, round_id, transaction_id, original_transaction_id, amount, currency, signature]
       properties:
         token:
           type: string
@@ -1262,6 +1428,13 @@ components:
           description: Refund amount (must be > 0)
         currency:
           $ref: '#/components/schemas/Currency'
+        round_finished:
+          type: boolean
+          default: false
+          description: >
+            Indicates that this is the last transaction in the round.
+            When true, the Operator may finalize the round for reporting
+            and reconciliation.
         signature:
           $ref: '#/components/schemas/Signature'
 
@@ -1308,10 +1481,9 @@ components:
             - 4 — Invalid or expired token (terminate session / prompt parent page reload)
             - 5 — Invalid signature (malformed packet)
             - 6 — Original transaction not found (referenced bet or win does not exist; re-send and retry, or terminate)
-            - 7 — Transaction duplication
             - 8 — Loss limit reached
             - 9 — Max bet limit reached
-          enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+          enum: [0, 1, 2, 3, 4, 5, 6, 8, 9]
         message:
           type: string
           maxLength: 255
@@ -1319,19 +1491,6 @@ components:
         signature:
           $ref: '#/components/schemas/Signature'
 
-  # ---------------------------------------------------------------------------
-  # Security schemes (informational — signature is in-body, not a header)
-  # ---------------------------------------------------------------------------
-  securitySchemes:
-    signatureAuth:
-      type: apiKey
-      in: header
-      name: X-Signature
-      description: >
-        All requests are authenticated via an in-body `signature` field
-        (MD5 of sorted fields + salt). This security scheme is declared
-        for documentation purposes; the actual signature is part of each
-        request/response body.
 
 tags:
   - name: Provider API
