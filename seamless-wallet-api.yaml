@@ -235,7 +235,7 @@ paths:
                 $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
               example:
                 status: true
-  
+
         '200#error':
           description: Free-spin offer creation failed
           headers:
@@ -250,7 +250,7 @@ paths:
               example:
                 status: false
                 message: "Game not found"
-  
+
 
   # -------------------------------------------------------------------------
   # Cancel Free Spin Offer
@@ -359,7 +359,7 @@ paths:
                 currency: "UAH"
                 language: "uk"
                 test_user: false
-  
+
         '200#error':
           description: Authentication failed
           headers:
@@ -371,6 +371,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 4
+                message: "Invalid or expired token"
 
   # -------------------------------------------------------------------------
   # Balance
@@ -422,6 +426,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 3
+                message: "User not found"
 
   # -------------------------------------------------------------------------
   # Bet
@@ -468,7 +476,7 @@ paths:
                 balance: "9894693.00"
                 transaction_id: "17513312722"
                 currency: "UAH"
-  
+
         '200#error':
           description: Bet failed
           headers:
@@ -480,6 +488,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 1
+                message: "Insufficient funds"
 
   # -------------------------------------------------------------------------
   # Free Spin Bet
@@ -527,7 +539,7 @@ paths:
                 transaction_id: "17513312722"
                 balance: "98946.93"
                 currency: "UAH"
-  
+
         '200#error':
           description: Free-spin bet failed
           headers:
@@ -539,6 +551,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 1
+                message: "Insufficient funds"
 
   # -------------------------------------------------------------------------
   # Win
@@ -612,6 +628,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 6
+                message: "Original transaction not found"
 
   # -------------------------------------------------------------------------
   # Free Spin Win
@@ -679,6 +699,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 6
+                message: "Original transaction not found"
 
   # -------------------------------------------------------------------------
   # Tournament Win
@@ -735,6 +759,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 0
+                message: "Server error"
 
   # -------------------------------------------------------------------------
   # Jackpot Win
@@ -791,6 +819,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 0
+                message: "Server error"
 
   # -------------------------------------------------------------------------
   # Refund
@@ -828,7 +860,7 @@ paths:
                   original_transaction_id: "97401685"
                   amount: "10.00"
                   currency: "UAH"
-    
+
               win_refund:
                 summary: Cancel a win
                 value:
@@ -870,6 +902,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 6
+                message: "Original transaction not found"
 
 # =============================================================================
 # Components
@@ -970,6 +1006,37 @@ components:
           format: decimal
           pattern: '^\d+\.\d{1,8}$'
           description: Tax amount as a decimal string (e.g. "180.00", "50.00")
+
+    # ── Extensions (domain-specific custom fields) ─────────────────────────
+    Extensions:
+      type: object
+      description: >
+        Optional domain-specific custom fields. Providers may include
+        additional metadata relevant to their game vertical (e.g. lottery,
+        scratch cards). The Operator MUST store these fields alongside the
+        transaction and MAY use them for reporting, reconciliation, or
+        regulatory compliance. Unknown fields MUST be preserved as-is.
+
+
+        **Known fields (lottery / instant games):**
+
+        | Field          | Type    | Description                                |
+        |----------------|---------|--------------------------------------------|
+        | `series_id`    | integer | Series identifier (instant / scratch)      |
+        | `draw_id`      | integer | Draw identifier (draw games)               |
+        | `barcode`      | string  | Human-readable ticket barcode              |
+      additionalProperties: true
+      properties:
+        series_id:
+          type: integer
+          description: Series identifier (instant / scratch games)
+        draw_id:
+          type: integer
+          description: Draw identifier (draw games)
+        barcode:
+          type: string
+          maxLength: 255
+          description: Human-readable ticket barcode
 
     # ── Free Spin Offer (Provider API) ─────────────────────────────────────
     CreateFreeSpinOfferRequest:
@@ -1154,6 +1221,8 @@ components:
             Indicates that this is the last transaction in the round.
             When true, the Operator may finalize the round for reporting
             and reconciliation.
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Free Spin Bet ─────────────────────────────────────────────────────────
@@ -1203,6 +1272,8 @@ components:
             Indicates that this is the last transaction in the round.
             When true, the Operator may finalize the round for reporting
             and reconciliation.
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Win ───────────────────────────────────────────────────────────────────
@@ -1251,6 +1322,8 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Free Spin Win ──────────────────────────────────────────────────────────
@@ -1303,6 +1376,8 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Tournament Win ────────────────────────────────────────────────────────
@@ -1347,6 +1422,8 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Jackpot Win ───────────────────────────────────────────────────────────
@@ -1391,6 +1468,8 @@ components:
             and reconciliation.
         taxes:
           $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Refund ────────────────────────────────────────────────────────────────
@@ -1445,6 +1524,8 @@ components:
             Indicates that this is the last transaction in the round.
             When true, the Operator may finalize the round for reporting
             and reconciliation.
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     # ── Shared response schemas ───────────────────────────────────────────────
@@ -1468,6 +1549,8 @@ components:
           description: User balance after the operation
         currency:
           $ref: '#/components/schemas/Currency'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
 
 
     ErrorResponse:
