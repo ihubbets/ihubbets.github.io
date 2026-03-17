@@ -907,6 +907,96 @@ paths:
                 code: 6
                 message: "Original transaction not found"
 
+  # -------------------------------------------------------------------------
+  # Batch
+  # -------------------------------------------------------------------------
+  /batch:
+    post:
+      operationId: batch
+      summary: Process multiple transactions in order
+      description: |
+        Processes an ordered list of transactions within a single HTTP call.
+        Transactions are applied **sequentially** in array order.
+
+        Common session fields (`token`, `user_id`, `currency`) are specified
+        once at the top level and apply to every transaction in the batch.
+
+        **Processing semantics:**
+        - Transactions are processed **atomically** (all-or-nothing).
+          Either every transaction in the batch succeeds and the balance is
+          updated, or none of them are applied.
+        - If any transaction fails, the Operator **rolls back** all
+          previously applied transactions in the batch — the player's
+          balance remains unchanged.
+        - Each transaction is idempotent on its `transaction_id`, same as the
+          individual endpoints.
+        - The `round_finished` flag on the last transaction in a round still
+          triggers round finalization as usual.
+      tags: [Operator Wallet API]
+      parameters:
+        - $ref: '#/components/parameters/XSignatureParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchRequest'
+            example:
+              token: "704be4er164ef34cc56ccbb64a960868"
+              user_id: 123
+              currency: "UAH"
+              transactions:
+                - action: "bet"
+                  game_id: "1056"
+                  round_id: "123456"
+                  transaction_id: "97401685"
+                  amount: "10.50"
+                - action: "win"
+                  game_id: "1056"
+                  round_id: "123456"
+                  transaction_id: "97401686"
+                  bet_transaction_id: "97401685"
+                  amount: "20.00"
+                  round_finished: true
+
+      responses:
+        '200':
+          description: All transactions succeeded
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResponse'
+              example:
+                status: true
+                balance: "98957.43"
+                currency: "UAH"
+                results:
+                  - transaction_id: "17513312722"
+                    balance: "98937.43"
+                  - transaction_id: "17513312723"
+                    balance: "98957.43"
+
+        '200#error':
+          description: Batch failed — no transactions were applied
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-Signature:
+              $ref: '#/components/headers/XSignature'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: false
+                code: 4
+                message: "Invalid or expired token"
+
 # =============================================================================
 # Components
 # =============================================================================
@@ -1526,6 +1616,353 @@ components:
             and reconciliation.
         extensions:
           $ref: '#/components/schemas/Extensions'
+
+
+    # ── Batch ────────────────────────────────────────────────────────────────
+    BatchRequest:
+      type: object
+      required: [token, user_id, currency, transactions]
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Gaming session token (real game only)
+        user_id:
+          type: integer
+          format: int64
+          description: Unique player identifier on Operator's side
+        currency:
+          $ref: '#/components/schemas/Currency'
+        transactions:
+          type: array
+          description: >
+            Ordered list of transactions to process sequentially.
+            Each item specifies an `action` that determines the transaction type
+            and corresponding fields.
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BatchTransaction'
+
+
+    BatchTransaction:
+      oneOf:
+        - $ref: '#/components/schemas/BatchBet'
+        - $ref: '#/components/schemas/BatchWin'
+        - $ref: '#/components/schemas/BatchFreeSpinBet'
+        - $ref: '#/components/schemas/BatchFreeSpinWin'
+        - $ref: '#/components/schemas/BatchTournamentWin'
+        - $ref: '#/components/schemas/BatchJackpotWin'
+        - $ref: '#/components/schemas/BatchRefund'
+      discriminator:
+        propertyName: action
+        mapping:
+          bet: '#/components/schemas/BatchBet'
+          win: '#/components/schemas/BatchWin'
+          free-spin-bet: '#/components/schemas/BatchFreeSpinBet'
+          free-spin-win: '#/components/schemas/BatchFreeSpinWin'
+          tournament-win: '#/components/schemas/BatchTournamentWin'
+          jackpot-win: '#/components/schemas/BatchJackpotWin'
+          refund: '#/components/schemas/BatchRefund'
+
+
+    BatchBet:
+      type: object
+      required: [action, game_id, round_id, transaction_id, amount]
+      properties:
+        action:
+          type: string
+          const: "bet"
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Bet amount (must be > 0)
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    BatchWin:
+      type: object
+      required: [action, game_id, round_id, transaction_id, bet_transaction_id, amount]
+      properties:
+        action:
+          type: string
+          const: "win"
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        bet_transaction_id:
+          type: string
+          maxLength: 255
+          description: Transaction ID of the original bet being settled
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross win amount before tax (0 for lost bets, > 0 for wins)
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    BatchFreeSpinBet:
+      type: object
+      required: [action, game_id, round_id, transaction_id, free_spin_offer_id, amount]
+      properties:
+        action:
+          type: string
+          const: "free-spin-bet"
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        free_spin_offer_id:
+          type: string
+          format: uuid
+          description: Free-spin offer identifier provided via `/create-free-spins`
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Nominal bet amount of the free-spin
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    BatchFreeSpinWin:
+      type: object
+      required: [action, game_id, round_id, transaction_id, free_spin_offer_id, bet_transaction_id, amount]
+      properties:
+        action:
+          type: string
+          const: "free-spin-win"
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        free_spin_offer_id:
+          type: string
+          format: uuid
+          description: Free-spin offer identifier provided via `/create-free-spins`
+        bet_transaction_id:
+          type: string
+          maxLength: 255
+          description: Transaction ID of the original bet being settled
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross win amount before tax (0 for lost bets, > 0 for wins)
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    BatchTournamentWin:
+      type: object
+      required: [action, game_id, round_id, transaction_id, amount]
+      properties:
+        action:
+          type: string
+          const: "tournament-win"
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross tournament win amount before tax (must be > 0)
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    BatchJackpotWin:
+      type: object
+      required: [action, game_id, round_id, transaction_id, amount]
+      properties:
+        action:
+          type: string
+          const: "jackpot-win"
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Gross jackpot win amount before tax (must be > 0)
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        taxes:
+          $ref: '#/components/schemas/Taxes'
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    BatchRefund:
+      type: object
+      required: [action, type, game_id, round_id, transaction_id, original_transaction_id, amount]
+      properties:
+        action:
+          type: string
+          const: "refund"
+        type:
+          type: string
+          maxLength: 50
+          enum: [bet, win]
+          description: >
+            Type of the original transaction being refunded:
+            `bet` — cancels a bet (credits the player),
+            `win` — cancels a win (debits the player).
+        game_id:
+          type: string
+          maxLength: 255
+          description: Identifier of the game
+        round_id:
+          type: string
+          maxLength: 255
+          description: Round identifier linking bets to wins
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique identifier of the transaction
+        original_transaction_id:
+          type: string
+          maxLength: 255
+          description: Transaction ID of the original bet or win being refunded
+        amount:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Refund amount (must be > 0)
+        round_finished:
+          type: boolean
+          default: false
+          description: Indicates that this is the last transaction in the round
+        extensions:
+          $ref: '#/components/schemas/Extensions'
+
+
+    # ── Batch Response ───────────────────────────────────────────────────────
+    BatchResponse:
+      type: object
+      required: [status, balance, currency, results]
+      properties:
+        status:
+          type: boolean
+          const: true
+          description: Always true — batch succeeded atomically
+        balance:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Final balance after all transactions in the batch
+        currency:
+          $ref: '#/components/schemas/Currency'
+        results:
+          type: array
+          description: >
+            Per-transaction results in the same order as the request.
+            Present only on success — contains one entry per transaction.
+          items:
+            $ref: '#/components/schemas/BatchTransactionResult'
+
+
+    BatchTransactionResult:
+      type: object
+      required: [transaction_id, balance]
+      properties:
+        transaction_id:
+          type: string
+          maxLength: 255
+          description: Unique transaction identifier assigned by the Operator
+        balance:
+          type: string
+          format: decimal
+          pattern: '^\d+\.\d{1,8}$'
+          description: Balance after this transaction
 
 
     # ── Shared response schemas ───────────────────────────────────────────────
