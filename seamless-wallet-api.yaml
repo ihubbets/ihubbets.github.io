@@ -78,7 +78,7 @@ info:
     This ensures safe retries over unreliable networks.
 
     **Response header:** All responses contain an `X-Request-Id` header —
-    a unique request identifier for quick transaction lookup on the operator's side.
+    a unique request identifier for quick transaction lookup on the Operator's side.
 
 servers:
   - url: https://{operatorHost}
@@ -161,7 +161,7 @@ paths:
         - name: token
           in: query
           required: true
-          description: Gaming session token. Required for real game mode only.
+          description: Gaming session token (real game only)
           schema:
             type: string
             maxLength: 255
@@ -317,8 +317,8 @@ paths:
       summary: Authenticate player session
       description: |
         Validates the gaming session token and returns player details.
-        Called on user logon to get relevant data for processing and
-        validate received data from launcher information.
+        Called on game launch to authenticate the player and verify
+        the session data received from the game launcher.
       tags: [Operator Wallet API]
       parameters:
         - $ref: '#/components/parameters/XSignatureParam'
@@ -953,7 +953,7 @@ components:
   # ---------------------------------------------------------------------------
   headers:
     XRequestId:
-      description: Unique request identifier for quick transaction search on the operator's side
+      description: Unique request identifier for quick transaction search on the Operator's side
       required: true
       schema:
         type: string
@@ -1043,11 +1043,11 @@ components:
         **Ingress validation** — requests violating any rule are rejected with error code `7`:
 
 
-        | Constraint  | Rule                                                          |
-        |-------------|---------------------------------------------------------------|
-        | Max fields  | 10                                                            |
-        | Field name  | `[a-zA-Z0-9_]`, max 50 characters                            |
-        | Field value | Scalar string matching `[a-zA-Z0-9._ -]`, max 255 characters |
+        | Constraint  | Rule                                                             |
+        |-------------|------------------------------------------------------------------|
+        | Max fields  | 10                                                               |
+        | Field name  | `[a-zA-Z0-9_]{1,50}`                                             |
+        | Field value | Non-empty string matching `[a-zA-Z0-9._ -]+`, max 255 characters |
 
 
         **Known fields (lottery / instant games):**
@@ -1067,7 +1067,7 @@ components:
       additionalProperties:
         type: string
         maxLength: 255
-        pattern: '^[a-zA-Z0-9._ -]*$'
+        pattern: '^[a-zA-Z0-9._ -]+$'
       properties:
         series_id:
           type: string
