@@ -1045,8 +1045,8 @@ components:
 
         | Field                | Type             | Description                                      |
         |----------------------|------------------|--------------------------------------------------|
-        | `series_id`          | integer          | Series identifier (instant / scratch)            |
-        | `draw_id`            | integer          | Draw identifier (draw games)                     |
+        | `series_id`          | string           | Series identifier (instant / scratch)            |
+        | `draw_id`            | string           | Draw identifier (draw games)                     |
         | `barcode`            | string           | Human-readable ticket barcode                    |
         | `scheduled_draw_at`  | string(ISO 8601) | When the draw is scheduled to occur              |
         | `actual_draw_at`     | string(ISO 8601) | When the draw actually occurred                  |
@@ -1054,10 +1054,12 @@ components:
       additionalProperties: true
       properties:
         series_id:
-          type: integer
+          type: string
+          maxLength: 255
           description: Series identifier (instant / scratch games)
         draw_id:
-          type: integer
+          type: string
+          maxLength: 255
           description: Draw identifier (draw games)
         barcode:
           type: string
