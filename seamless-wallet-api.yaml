@@ -1040,6 +1040,16 @@ components:
         regulatory compliance. Unknown fields MUST be preserved as-is.
 
 
+        **Ingress validation** — requests violating any rule are rejected with error code `7`:
+
+
+        | Constraint  | Rule                                                          |
+        |-------------|---------------------------------------------------------------|
+        | Max fields  | 10                                                            |
+        | Field name  | `[a-zA-Z0-9_]`, max 50 characters                            |
+        | Field value | Scalar string matching `[a-zA-Z0-9._ -]`, max 255 characters |
+
+
         **Known fields (lottery / instant games):**
 
 
@@ -1051,7 +1061,13 @@ components:
         | `scheduled_draw_at`  | string(ISO 8601) | When the draw is scheduled to occur              |
         | `actual_draw_at`     | string(ISO 8601) | When the draw actually occurred                  |
         | `cutoff_at`          | string(ISO 8601) | When ticket sales were closed                    |
-      additionalProperties: true
+      maxProperties: 10
+      propertyNames:
+        pattern: '^[a-zA-Z0-9_]{1,50}$'
+      additionalProperties:
+        type: string
+        maxLength: 255
+        pattern: '^[a-zA-Z0-9._ -]*$'
       properties:
         series_id:
           type: string
@@ -1959,9 +1975,10 @@ components:
             - 4 — Invalid or expired token (terminate session / prompt parent page reload)
             - 5 — Invalid signature (X-Signature header missing or mismatch)
             - 6 — Original transaction not found (referenced bet or win does not exist; re-send and retry, or terminate)
+            - 7 — Bad request (invalid request payload; do not retry)
             - 8 — Loss limit reached
             - 9 — Max bet limit reached
-          enum: [0, 1, 2, 3, 4, 5, 6, 8, 9]
+          enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         message:
           type: string
           maxLength: 255
