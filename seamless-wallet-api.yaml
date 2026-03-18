@@ -2,6 +2,9 @@ openapi: 3.1.0
 info:
   title: Seamless Wallet API
   version: 4.0.0
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
   description: |
     Seamless Wallet integration protocol for game providers and operators.
 
@@ -90,6 +93,9 @@ servers:
       providerHost:
         default: games.provider.com
         description: Game provider's host
+
+security:
+  - XSignature: []
 
 # ===========================================================================
 # Paths
@@ -223,7 +229,7 @@ paths:
 
       responses:
         '200':
-          description: Free-spin offer created
+          description: Free-spin offer created, or creation failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -232,24 +238,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
-              example:
-                status: true
-
-        '200#error':
-          description: Free-spin offer creation failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
-              example:
-                status: false
-                message: "Game not found"
+                oneOf:
+                  - $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
+                  - $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                error:
+                  value:
+                    status: false
+                    message: "Game not found"
 
 
   # -------------------------------------------------------------------------
@@ -283,7 +282,7 @@ paths:
 
       responses:
         '200':
-          description: Free-spin offer cancelled
+          description: Free-spin offer cancelled, or cancellation failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -292,24 +291,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
-              example:
-                status: true
-
-        '200#error':
-          description: Cancellation failed (e.g. offer not found or already fully used)
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
-              example:
-                status: false
-                message: "Offer not found or already completed"
+                oneOf:
+                  - $ref: '#/components/schemas/FreeSpinOfferStatusResponse'
+                  - $ref: '#/components/schemas/FreeSpinOfferErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                error:
+                  value:
+                    status: false
+                    message: "Offer not found or already completed"
 
 
   # =========================================================================
@@ -341,7 +333,7 @@ paths:
 
       responses:
         '200':
-          description: Successful authentication
+          description: Successful authentication, or authentication failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -350,31 +342,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
-              example:
-                status: true
-                user_id: 123456
-                user_name: "Taras Shevchenko"
-                balance: "98947.93"
-                currency: "UAH"
-                language: "uk"
-                test_user: false
-
-        '200#error':
-          description: Authentication failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 4
-                message: "Invalid or expired token"
+                oneOf:
+                  - $ref: '#/components/schemas/AuthResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    user_id: 123456
+                    user_name: "Taras Shevchenko"
+                    balance: "98947.93"
+                    currency: "UAH"
+                    language: "uk"
+                    test_user: false
+                error:
+                  value:
+                    status: false
+                    code: 4
+                    message: "Invalid or expired token"
 
   # -------------------------------------------------------------------------
   # Balance
@@ -400,7 +385,7 @@ paths:
 
       responses:
         '200':
-          description: Balance retrieved
+          description: Balance retrieved, or balance check failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -409,27 +394,20 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BalanceResponse'
-              example:
-                status: true
-                balance: "98947.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Balance check failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 3
-                message: "User not found"
+                oneOf:
+                  - $ref: '#/components/schemas/BalanceResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    balance: "98947.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 3
+                    message: "User not found"
 
   # -------------------------------------------------------------------------
   # Bet
@@ -461,7 +439,7 @@ paths:
 
       responses:
         '200':
-          description: Bet placed
+          description: Bet placed, or bet failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -470,28 +448,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                balance: "9894693.00"
-                transaction_id: "17513312722"
-                currency: "UAH"
-
-        '200#error':
-          description: Bet failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 1
-                message: "Insufficient funds"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    balance: "9894693.00"
+                    transaction_id: "17513312722"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 1
+                    message: "Insufficient funds"
 
   # -------------------------------------------------------------------------
   # Free Spin Bet
@@ -524,7 +495,7 @@ paths:
 
       responses:
         '200':
-          description: Free-spin bet placed
+          description: Free-spin bet placed, or free-spin bet failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -533,28 +504,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312722"
-                balance: "98946.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Free-spin bet failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 1
-                message: "Insufficient funds"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    transaction_id: "17513312722"
+                    balance: "98946.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 1
+                    message: "Insufficient funds"
 
   # -------------------------------------------------------------------------
   # Win
@@ -601,7 +565,7 @@ paths:
 
       responses:
         '200':
-          description: Win processed
+          description: Win processed, or win processing failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -610,28 +574,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312723"
-                balance: "98948.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Win processing failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 6
-                message: "Original transaction not found"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    transaction_id: "17513312723"
+                    balance: "98948.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 6
+                    message: "Original transaction not found"
 
   # -------------------------------------------------------------------------
   # Free Spin Win
@@ -672,7 +629,7 @@ paths:
 
       responses:
         '200':
-          description: Free-spin win processed
+          description: Free-spin win processed, or free-spin win processing failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -681,28 +638,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312723"
-                balance: "98948.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Free-spin win processing failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 6
-                message: "Original transaction not found"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    transaction_id: "17513312723"
+                    balance: "98948.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 6
+                    message: "Original transaction not found"
 
   # -------------------------------------------------------------------------
   # Tournament Win
@@ -732,7 +682,7 @@ paths:
 
       responses:
         '200':
-          description: Tournament win processed
+          description: Tournament win processed, or tournament win processing failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -741,28 +691,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312723"
-                balance: "98948.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Tournament win processing failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 0
-                message: "Server error"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    transaction_id: "17513312723"
+                    balance: "98948.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 0
+                    message: "Server error"
 
   # -------------------------------------------------------------------------
   # Jackpot Win
@@ -792,7 +735,7 @@ paths:
 
       responses:
         '200':
-          description: Jackpot win processed
+          description: Jackpot win processed, or jackpot win processing failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -801,28 +744,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312723"
-                balance: "98948.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Jackpot win processing failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 0
-                message: "Server error"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    transaction_id: "17513312723"
+                    balance: "98948.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 0
+                    message: "Server error"
 
   # -------------------------------------------------------------------------
   # Refund
@@ -875,7 +811,7 @@ paths:
                   currency: "UAH"
       responses:
         '200':
-          description: Refund processed
+          description: Refund processed, or refund failed
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -884,28 +820,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
-              example:
-                status: true
-                transaction_id: "17513312723"
-                balance: "98948.93"
-                currency: "UAH"
-
-        '200#error':
-          description: Refund failed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 6
-                message: "Original transaction not found"
+                oneOf:
+                  - $ref: '#/components/schemas/TransactionResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
+                    transaction_id: "17513312723"
+                    balance: "98948.93"
+                    currency: "UAH"
+                error:
+                  value:
+                    status: false
+                    code: 6
+                    message: "Original transaction not found"
 
   # -------------------------------------------------------------------------
   # Batch
@@ -961,7 +890,7 @@ paths:
 
       responses:
         '200':
-          description: All transactions succeeded
+          description: All transactions succeeded, or batch failed with no transactions applied
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -970,37 +899,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BatchResponse'
-              example:
-                status: true
-                balance: "98957.43"
-                currency: "UAH"
-                results:
-                  - transaction_id: "17513312722"
-                    balance: "98937.43"
-                  - transaction_id: "17513312723"
+                oneOf:
+                  - $ref: '#/components/schemas/BatchResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                success:
+                  value:
+                    status: true
                     balance: "98957.43"
-
-        '200#error':
-          description: Batch failed — no transactions were applied
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            X-Signature:
-              $ref: '#/components/headers/XSignature'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                status: false
-                code: 4
-                message: "Invalid or expired token"
+                    currency: "UAH"
+                    results:
+                      - transaction_id: "17513312722"
+                        balance: "98937.43"
+                      - transaction_id: "17513312723"
+                        balance: "98957.43"
+                error:
+                  value:
+                    status: false
+                    code: 4
+                    message: "Invalid or expired token"
 
 # =============================================================================
 # Components
 # =============================================================================
 components:
+
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    XSignature:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: HMAC-SHA256 signature of the raw request body
 
   # ---------------------------------------------------------------------------
   # Parameters (request headers)
@@ -1110,11 +1042,15 @@ components:
 
         **Known fields (lottery / instant games):**
 
-        | Field          | Type    | Description                                |
-        |----------------|---------|--------------------------------------------|
-        | `series_id`    | integer | Series identifier (instant / scratch)      |
-        | `draw_id`      | integer | Draw identifier (draw games)               |
-        | `barcode`      | string  | Human-readable ticket barcode              |
+
+        | Field                | Type             | Description                                      |
+        |----------------------|------------------|--------------------------------------------------|
+        | `series_id`          | integer          | Series identifier (instant / scratch)            |
+        | `draw_id`            | integer          | Draw identifier (draw games)                     |
+        | `barcode`            | string           | Human-readable ticket barcode                    |
+        | `scheduled_draw_at`  | string(ISO 8601) | When the draw is scheduled to occur              |
+        | `actual_draw_at`     | string(ISO 8601) | When the draw actually occurred                  |
+        | `cutoff_at`          | string(ISO 8601) | When ticket sales were closed                    |
       additionalProperties: true
       properties:
         series_id:
@@ -1127,6 +1063,18 @@ components:
           type: string
           maxLength: 255
           description: Human-readable ticket barcode
+        scheduled_draw_at:
+          type: string
+          format: date-time
+          description: When the draw is scheduled to occur (ISO 8601, e.g. `2025-06-01T18:00:00Z`)
+        actual_draw_at:
+          type: string
+          format: date-time
+          description: When the draw actually occurred (ISO 8601, e.g. `2025-06-01T18:03:42Z`)
+        cutoff_at:
+          type: string
+          format: date-time
+          description: When ticket sales were closed (ISO 8601, e.g. `2025-06-01T17:55:00Z`)
 
     # ── Free Spin Offer (Provider API) ─────────────────────────────────────
     CreateFreeSpinOfferRequest:
